@@ -1,200 +1,184 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import * as z from "zod";
 import useStore from "../../store";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../../components/UI/Card";
+import { SocialAuth } from "../../components/UI/socialauth";
+import { Separator } from "../../components/UI/separator";
+import Input from "../../components/UI/input";
+import { Button } from "../../components/UI/button";
+import { BiLoader } from "react-icons/bi";
+import { toast } from "sonner";
+import api from "../../libs/apiCall";
 
-import { MdAlternateEmail } from "react-icons/md";
-import { FaFingerprint } from "react-icons/fa";
-import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
+const RegisterSchema = z.object({
+  email: z
+    .string({ required_error: "Email is required." })
+    .email({ message: "Invalid email address" }),
 
-const SignUp = () => {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  firstname: z
+    .string({ required_error: "FirstName is required" })
+    .min(1, "FirstName is required"),
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [firstname, setFirstname] = useState("");
-  const [lastname, setLastname] = useState("");
-  const [contact, setContact] = useState("");
+  lastname: z
+    .string({ required_error: "LastName is required" })
+    .min(1, "LastName is required"),
 
-  const togglePasswordView = () => setShowPassword(!showPassword);
-  const toggleConfirmPasswordView = () => setShowConfirmPassword(!showConfirmPassword);
+  contact: z
+    .string({ required_error: "Contact is required" })
+    .regex(/^\d{10}$/, { message: "Contact must be a 10-digit number" }),
 
-  const setCredentials = useStore((state) => state.setCredentails);
+  password: z
+    .string({ required_error: "Password is required" })
+    .min(6, "Password must be at least 6 characters"),
+});
+
+const Signup = () => {
+  const user = useStore((state) => state.user);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(RegisterSchema),
+  });
+
   const navigate = useNavigate();
+  const [loading, setLoading] = useState();
 
-  const isValidGmail = (email) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(email);
-  const isValidContact = (contact) => /^[0-9]{7,15}$/.test(contact);
-
-  const handleSignUp = async () => {
-    if (!firstname || !lastname || !email || !contact || !password || !confirmPassword) {
-      alert("Please fill all fields.");
-      return;
-    }
-
-    if (!isValidGmail(email)) {
-      alert("Please enter a valid Gmail address.");
-      return;
-    }
-
-    if (!isValidContact(contact)) {
-      alert("Please enter a valid contact number (7–15 digits).");
-      return;
-    }
-
-    if (password.length < 6) {
-      alert("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      alert("Passwords do not match.");
-      return;
-    }
-
+  const onSubmit = async (data) => {
     try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          firstname,
-          lastname,
-          contact,
-          password,
-        }),
-      });
-
-      if (res.ok) {
-        alert("Registration successful!");
-        navigate("/sign-in");
-      } else {
-        const data = await res.json();
-        alert(data.message || "Signup failed.");
+      setLoading(true);
+      const { data: res } = await api.post("/auth/register", data);
+      if (res?.user) {
+        toast.success("Account created sucessfully. You can now login.");
+        setTimeout(() => {
+          navigate("/sign-in");
+        }, 1500);
       }
-    } catch (err) {
-      console.error(err);
-      alert("Server error.");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    user && navigate("/");
+  }, [user]);
   return (
-    <div
-      className="w-full h-screen flex items-center justify-center bg-cover bg-center relative"
-      style={{ backgroundImage: "url('/background.png')" }}
-    >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-0" />
-
-      <div className="w-[90%] max-w-sm p-5 bg-gray-900 bg-opacity-80 backdrop-blur-lg flex flex-col items-center gap-3 rounded-xl shadow-lg z-10">
-        <img src="/logo.png" alt="logo" className="w-14 h-14 object-cover rounded-full" />
-        <h1 className="text-xl font-semibold text-white">Create an Account</h1>
-        <p className="text-sm text-gray-400">
-          Already have an account?{" "}
-          <span
-            className="text-white underline cursor-pointer"
-            onClick={() => navigate("/sign-in")}
+    <div className="w-full h-screen flex items-center justify-center bg-cover bg-center relative">
+      <Card
+        className={
+          "w-[400px] bg-white dark:bg-black/20 shadow-md overflow-hidden"
+        }
+      >
+        <div className="p-6 md:-8">
+          <CardHeader className="py-0">
+            <CardTitle className="mb-8 text-center dark:text-white">
+              Create Account
+            </CardTitle>
+          </CardHeader>
+          <CardContent className={"p-0"}>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="mb-8 space-y-6">
+                <SocialAuth isLoading={loading} setLoading={setLoading} />
+                <Separator />
+                <Input
+                  disabled={loading}
+                  id="firstName"
+                  label="First Name"
+                  name="firstname"
+                  register={register}
+                  type="text"
+                  placeholder="John"
+                  error={errors?.firstname?.message}
+                  {...register("firstname")}
+                  className="text-sm border dark:border-gray-800 dark:bg-transparent dark:placeholder:text-gray-700 dark:text-gray-300 dark:outline-none"
+                />
+                <Input
+                  disabled={loading}
+                  id="lastname"
+                  label="Last Name"
+                  name="lastname"
+                  register={register}
+                  type="text"
+                  placeholder="Smith"
+                  error={errors?.lastname?.message}
+                  {...register("lastname")}
+                  className="text-sm border dark:border-gray-800 dark:bg-transparent dark:placeholder:text-gray-700 dark:text-gray-950 dark:outline-none"
+                />
+                <Input
+                  disabled={loading}
+                  id="contact"
+                  label="Contact"
+                  name="contact"
+                  register={register}
+                  type="text"
+                  placeholder="9825674877"
+                  error={errors?.contact?.message}
+                  {...register("contact")}
+                  className="text-sm border dark:border-gray-800 dark:bg-transparent dark:placeholder:text-gray-700 dark:text-gray-950 dark:outline-none"
+                />
+                <Input
+                  disabled={loading}
+                  id="email"
+                  label="Email"
+                  name="email"
+                  register={register}
+                  type="email"
+                  placeholder="John.smith@gmail.com"
+                  error={errors?.email?.message}
+                  {...register("email")}
+                  className="text-sm border dark:border-gray-800 dark:bg-transparent dark:placeholder:text-gray-700 dark:text-gray-950 dark:outline-none"
+                />
+                <Input
+                  disabled={loading}
+                  id="password"
+                  label="Password"
+                  name="password"
+                  register={register}
+                  type="password"
+                  placeholder="Min six letters"
+                  error={errors?.password?.message}
+                  {...register("password")}
+                  className="text-sm border dark:border-gray-800 dark:bg-transparent dark:placeholder:text-gray-700 dark:text-gray-950 dark:outline-none"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-violet-800 cursor-pointer"
+                disabled={loading}
+              >
+                {loading ? (
+                  <BiLoader className="text-2x1 text-white animate-spin" />
+                ) : (
+                  "Create an account"
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </div>
+        <CardFooter className="justify-center gap-2">
+          <p className="text-sm text-gray-600"> Already have an account?</p>
+          <Link
+            to="/sign-in"
+            className="text-sm font-semibold text-violet-600 hover:underline"
           >
             Sign in
-          </span>
-        </p>
-
-        <div className="w-full flex flex-col gap-3">
-          {/* Firstname */}
-          <input
-            type="text"
-            placeholder="First Name"
-            value={firstname}
-            onChange={(e) => setFirstname(e.target.value)}
-            className="bg-gray-800 text-white text-sm p-2 rounded-xl outline-none"
-          />
-
-          {/* Lastname */}
-          <input
-            type="text"
-            placeholder="Last Name"
-            value={lastname}
-            onChange={(e) => setLastname(e.target.value)}
-            className="bg-gray-800 text-white text-sm p-2 rounded-xl outline-none"
-          />
-             {/* Contact */}
-          <input
-            type="text"
-            placeholder="Contact Number"
-            value={contact}
-            onChange={(e) => setContact(e.target.value)}
-            className="bg-gray-800 text-white text-sm p-2 rounded-xl outline-none"
-          />
-
-          {/* Email */}
-          <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-xl">
-            <MdAlternateEmail className="text-white" />
-            <input
-              type="email"
-              placeholder="Gmail address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="bg-transparent border-0 w-full outline-none text-white text-sm"
-            />
-          </div>
-
-       
-
-          {/* Password */}
-          <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-xl relative">
-            <FaFingerprint className="text-white" />
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-transparent border-0 w-full outline-none text-white text-sm"
-            />
-            {showPassword ? (
-              <FaRegEyeSlash
-                className="absolute right-5 cursor-pointer text-white"
-                onClick={togglePasswordView}
-              />
-            ) : (
-              <FaRegEye
-                className="absolute right-5 cursor-pointer text-white"
-                onClick={togglePasswordView}
-              />
-            )}
-          </div>
-
-          {/* Confirm Password */}
-          <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-xl relative">
-            <FaFingerprint className="text-white" />
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="bg-transparent border-0 w-full outline-none text-white text-sm"
-            />
-            {showConfirmPassword ? (
-              <FaRegEyeSlash
-                className="absolute right-5 cursor-pointer text-white"
-                onClick={toggleConfirmPasswordView}
-              />
-            ) : (
-              <FaRegEye
-                className="absolute right-5 cursor-pointer text-white"
-                onClick={toggleConfirmPasswordView}
-              />
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={handleSignUp}
-          className="w-full p-2 bg-green-500 rounded-xl mt-3 hover:bg-green-600 text-white text-sm"
-        >
-          Sign Up
-        </button>
-      </div>
+          </Link>
+        </CardFooter>
+      </Card>
     </div>
   );
 };
 
-export default SignUp;
+export default Signup;
